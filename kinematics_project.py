@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 
 
 # prep the data
-data_directory = "./data.csv"
+data_directory = "./data.csv" 
 data = pd.read_csv(data_directory, header=None)
 data = data.to_numpy()
 
@@ -20,14 +20,12 @@ class ArrayDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        sample = (self.data[idx][0:3], self.data[idx][3:])
+        sample = (self.data[idx][3:], self.data[idx][0:3])
         return sample
 
-BATCH_SIZE = 1
+BATCH_SIZE = 500
 training_data = ArrayDataset(data)
-testing_data = ArrayDataset(data)
 train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=True)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print('using: ', device)
@@ -39,13 +37,13 @@ class NueralNetwork(nn.Module):
         self.linear_relu_stack = nn.Sequential(
             nn.Linear(3, 6),
             nn.ReLU(),
-            nn.Linear(6, 10),
+            nn.Linear(6, 12),
             nn.ReLU(),
-            nn.Linear(10, 15),
+            nn.Linear(12, 18),
             nn.ReLU(),
-            nn.Linear(15, 20),
+            nn.Linear(18, 32),
             nn.ReLU(),
-            nn.Linear(20, 3)
+            nn.Linear(32, 3),
         )
     
     def forward(self, x):
@@ -75,13 +73,8 @@ def train(dataloader, model, loss_fn, optimizer):
         optimizer.step()
         optimizer.zero_grad()
 
-        if batch % 10000 == 0:
-            loss, current = loss.item(), (batch + 1)*len(X)
-            print(f"loss: {loss:>7f} [{current:>5d}/{size:>5d}]")
-
 # test function
-# test function
-def test(dataloader, model, msg):
+def test(dataloader, model, loss_fn):
     model.eval()
     mse = 0
     with torch.no_grad():
@@ -90,13 +83,21 @@ def test(dataloader, model, msg):
             y = y.to(torch.float32)
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            mse += (pred - y).norm().type(torch.float).item()
-    print(f"{msg} Error: Inaccuracy: {mse:>0.3f} \n")
-
-epochs = 5
-for t in range(epochs):
-    print(f"Epoch {t+1}\n-------------")
+            mse += loss_fn(pred, y).item()
+    mse /= len(dataloader)
+    print(f"MSE Error: {mse:>0.3f} \n")
+    return mse
+# epochs = 800
+mse = 10
+# for t in range(epochs):
+best_score = 100
+while mse > 1e-2:
+    # print(f"Epoch {t+1}\n-------------")
     train(train_dataloader, model, loss_fn, optimizer)
-    test(test_dataloader, model, 'test')
-    test(train_dataloader, model, 'train')
+    mse = test(train_dataloader, model, loss_fn)
+    if mse < best_score:
+        torch.save(model.state_dict(), 'model.pth')
+        best_score = mse
+# save model
+torch.save(model.state_dict(), 'model.pth')
 print('Done!')
